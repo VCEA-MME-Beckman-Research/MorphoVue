@@ -1,0 +1,16 @@
+{
+  "name": "morphovue-firebase",
+  "version": "1.0.0",
+  "description": "Firebase configuration for CT Tick ML Platform",
+  "scripts": {
+    "deploy": "firebase deploy",
+    "deploy:hosting": "firebase deploy --only hosting",
+    "deploy:firestore": "firebase deploy --only firestore",
+    "deploy:storage": "firebase deploy --only storage",
+    "emulators:start": "firebase emulators:start"
+  },
+  "dependencies": {
+    "firebase-tools": "^13.0.0"
+  }
+}
+

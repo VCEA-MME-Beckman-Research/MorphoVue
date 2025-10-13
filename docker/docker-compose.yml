@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: cttick-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
+      - FIREBASE_CREDENTIALS_PATH=/app/firebase-credentials.json
+      - LABEL_STUDIO_URL=http://labelstudio:8080
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5000
+    volumes:
+      - ../backend/firebase-credentials.json:/app/firebase-credentials.json:ro
+      - ../backend/app:/app/app
+    networks:
+      - cttick-network
+    depends_on:
+      - labelstudio
+    restart: unless-stopped
+
+  labelstudio:
+    image: heartexlabs/label-studio:latest
+    container_name: cttick-labelstudio
+    ports:
+      - "8080:8080"
+    environment:
+      - LABEL_STUDIO_HOST=http://localhost:8080
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/label-studio/files
+    volumes:
+      - label-studio-data:/label-studio/data
+      - label-studio-files:/label-studio/files
+    networks:
+      - cttick-network
+    restart: unless-stopped
+
+volumes:
+  label-studio-data:
+    driver: local
+  label-studio-files:
+    driver: local
+
+networks:
+  cttick-network:
+    driver: bridge
+

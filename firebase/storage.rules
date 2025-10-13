@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isResearcher() {
+      return isAuthenticated();
+    }
+    
+    // Scans - TIFF files
+    match /scans/{projectId}/{scanId}.tiff {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    match /scans/{projectId}/{scanId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Annotations - Label Studio exports
+    match /annotations/{scanId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Segmentations - MONAI outputs
+    match /segmentations/{scanId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Job scripts
+    match /job_scripts/{jobId}.sh {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Allow Label Studio access
+    match /label-studio/{allPaths=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
+

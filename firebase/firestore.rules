@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isResearcher() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['researcher', 'admin'];
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || request.auth.uid == userId;
+    }
+    
+    // Projects collection
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isResearcher();
+      allow update, delete: if isAdmin() || 
+                               resource.data.researcher_id == request.auth.uid;
+    }
+    
+    // Scans collection
+    match /scans/{scanId} {
+      allow read: if isAuthenticated();
+      allow create: if isResearcher();
+      allow update: if isResearcher();
+      allow delete: if isAdmin();
+    }
+    
+    // Annotations collection
+    match /annotations/{annotationId} {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Segmentations collection
+    match /segmentations/{segmentationId} {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Quantification results collection
+    match /quantification_results/{resultId} {
+      allow read: if isAuthenticated();
+      allow write: if isResearcher();
+    }
+    
+    // Kamiak jobs collection
+    match /kamiak_jobs/{jobId} {
+      allow read: if isAuthenticated();
+      allow create: if isResearcher();
+      allow update: if isResearcher();
+      allow delete: if isAdmin();
+    }
+  }
+}
+
