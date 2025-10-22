@@ -3,9 +3,9 @@ from typing import List
 from datetime import datetime
 import uuid
 
-from app.firebase_client import firebase_client
+import app.firebase_client as fb
 from app.models import ResultUpload, Segmentation, QuantificationResult
-from app.main import verify_auth_token
+from app.deps import verify_auth_token
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def upload_results(
 ):
     """Upload MONAI segmentation results from Kamiak"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         
         # Create segmentation document
         segmentation_id = str(uuid.uuid4())
@@ -66,7 +66,7 @@ async def get_scan_segmentations(
 ):
     """Get all segmentations for a scan"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         segmentations_ref = db.collection('segmentations').where('scan_id', '==', scan_id)
         segmentations_ref = segmentations_ref.order_by('created_at', direction='DESCENDING')
         
@@ -87,7 +87,7 @@ async def get_quantification_results(
 ):
     """Get quantification results for a segmentation"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         quant_ref = db.collection('quantification_results').where('segmentation_id', '==', segmentation_id)
         
         results = []
@@ -107,7 +107,7 @@ async def get_segmentation(
 ):
     """Get segmentation details"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('segmentations').document(segmentation_id).get()
         
         if not doc.exists:
@@ -128,8 +128,8 @@ async def get_segmentation_download_url(
 ):
     """Get signed download URL for segmentation mask or volume"""
     try:
-        db = firebase_client.db
-        bucket = firebase_client.bucket
+        db = fb.firebase_client.db
+        bucket = fb.firebase_client.bucket
 
         doc = db.collection('segmentations').document(segmentation_id).get()
         if not doc.exists:

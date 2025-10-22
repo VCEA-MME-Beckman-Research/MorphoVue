@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import vtkGenericRenderWindow from '@vtk-js/vtk.js/Rendering/Misc/GenericRenderWindow';
-import vtkNrrdReader from '@vtk-js/vtk.js/IO/Misc/NrrdReader';
-import vtkColorTransferFunction from '@vtk-js/vtk.js/Rendering/Core/ColorTransferFunction';
-import vtkPiecewiseFunction from '@vtk-js/vtk.js/Common/DataModel/PiecewiseFunction';
-import vtkVolume from '@vtk-js/vtk.js/Rendering/Core/Volume';
-import vtkVolumeMapper from '@vtk-js/vtk.js/Rendering/Core/VolumeMapper';
-import vtkVolumeProperty from '@vtk-js/vtk.js/Rendering/Core/VolumeProperty';
+import vtkGenericRenderWindow from 'vtk.js/Sources/Rendering/Misc/GenericRenderWindow';
+import vtkNrrdReader from 'vtk.js/Sources/IO/Misc/NrrdReader';
+import vtkColorTransferFunction from 'vtk.js/Sources/Rendering/Core/ColorTransferFunction';
+import vtkPiecewiseFunction from 'vtk.js/Sources/Common/DataModel/PiecewiseFunction';
+import vtkVolume from 'vtk.js/Sources/Rendering/Core/Volume';
+import vtkVolumeMapper from 'vtk.js/Sources/Rendering/Core/VolumeMapper';
+import vtkVolumeProperty from 'vtk.js/Sources/Rendering/Core/VolumeProperty';
 
 // Minimal 3D volume viewer for NRRD label masks (and optional base volume)
 export default function SegmentationViewer({ volumeUrl = null, maskUrl, height = 500 }) {
