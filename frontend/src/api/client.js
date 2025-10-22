@@ -74,6 +74,8 @@ export const api = {
   getQuantificationResults: (segmentationId) => 
     apiClient.get(`/api/quantification/${segmentationId}`),
   getSegmentation: (id) => apiClient.get(`/api/segmentations/${id}`),
+  getSegmentationDownloadUrl: (id, fileType = 'mask') =>
+    apiClient.get(`/api/segmentations/${id}/download-url`, { params: { file_type: fileType } }),
   
   // Health
   health: () => apiClient.get('/api/health'),

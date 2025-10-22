@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api/client';
+import SegmentationViewer from '../components/SegmentationViewer';
 
 function ReviewView() {
   const { scanId } = useParams();
@@ -9,6 +10,7 @@ function ReviewView() {
   const [quantResults, setQuantResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSegmentation, setSelectedSegmentation] = useState(null);
+  const [viewerUrls, setViewerUrls] = useState({ mask: null, volume: null });
 
   useEffect(() => {
     loadData();
@@ -25,8 +27,19 @@ function ReviewView() {
       setSegmentations(segRes.data);
       
       if (segRes.data.length > 0) {
-        loadQuantificationResults(segRes.data[0].id);
-        setSelectedSegmentation(segRes.data[0]);
+        const seg = segRes.data[0];
+        setSelectedSegmentation(seg);
+        loadQuantificationResults(seg.id);
+        // fetch signed URLs for mask/volume
+        try {
+          const [maskUrlResp, volUrlResp] = await Promise.all([
+            api.getSegmentationDownloadUrl(seg.id, 'mask'),
+            seg.volume_url ? api.getSegmentationDownloadUrl(seg.id, 'volume') : Promise.resolve({ data: { download_url: null }})
+          ]);
+          setViewerUrls({ mask: maskUrlResp.data.download_url, volume: volUrlResp.data.download_url });
+        } catch (e) {
+          console.error('Failed to fetch signed URLs', e);
+        }
       }
     } catch (error) {
       console.error('Failed to load data', error);
@@ -75,32 +88,14 @@ function ReviewView() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 3D Viewer - Placeholder */}
+          {/* 3D Viewer */}
           <div className="lg:col-span-2 bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold mb-4">3D Visualization</h2>
-            <div className="bg-gray-100 rounded-lg flex items-center justify-center" style={{ height: '500px' }}>
-              <div className="text-center">
-                <svg className="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-                <p className="mt-2 text-sm text-gray-600">
-                  VTK.js 3D viewer will be displayed here
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Shows CT volume with segmentation overlay
-                </p>
-                <div className="mt-4">
-                  <a
-                    href="https://kitware.github.io/vtk-js/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:text-primary-700 text-sm"
-                  >
-                    VTK.js Documentation →
-                  </a>
-                </div>
-              </div>
-            </div>
+            <SegmentationViewer
+              volumeUrl={viewerUrls.volume}
+              maskUrl={viewerUrls.mask}
+              height={500}
+            />
             <div className="mt-4 text-sm text-gray-600">
               <p><strong>Model:</strong> {selectedSegmentation?.model_version}</p>
               <p><strong>Created:</strong> {new Date(selectedSegmentation?.created_at).toLocaleString()}</p>
@@ -148,12 +143,22 @@ function ReviewView() {
             {/* Download Button */}
             {selectedSegmentation && (
               <div className="mt-6">
-                <button
-                  className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
-                  onClick={() => window.open(selectedSegmentation.mask_url, '_blank')}
-                >
-                  Download Mask (NRRD)
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                    onClick={() => window.open(viewerUrls.mask || selectedSegmentation.mask_url, '_blank')}
+                  >
+                    Download Mask (NRRD)
+                  </button>
+                  {selectedSegmentation.volume_url && (
+                    <button
+                      className="w-full px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800"
+                      onClick={() => window.open(viewerUrls.volume, '_blank')}
+                    >
+                      Download Volume (NRRD)
+                    </button>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 mt-2 text-center">
                   Open in 3D Slicer for detailed review
                 </p>

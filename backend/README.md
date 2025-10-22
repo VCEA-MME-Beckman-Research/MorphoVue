@@ -33,6 +33,16 @@ uvicorn app.main:app --reload --port 8000
 
 API docs available at: http://localhost:8000/docs
 
+### Environment
+Create `.env` with:
+
+```
+firebase_project_id=your-project-id
+firebase_storage_bucket=your-project-id.appspot.com
+firebase_credentials_path=./firebase-credentials.json
+cors_origins=http://localhost:3000
+```
+
 ## API Endpoints
 
 ### Projects
@@ -61,6 +71,8 @@ API docs available at: http://localhost:8000/docs
 - `POST /api/results/upload` - Upload MONAI results
 - `GET /api/scans/{id}/segmentations` - Get scan segmentations
 - `GET /api/quantification/{id}` - Get quantification results
+- `GET /api/segmentations/{id}` - Get segmentation details
+- `GET /api/segmentations/{id}/download-url?file_type=mask|volume` - Signed URL for mask/volume
 
 ## Docker Build
 
