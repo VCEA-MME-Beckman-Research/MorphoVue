@@ -28,6 +28,8 @@ MorphoVue/
 ├── backend/              # FastAPI server
 ├── ml-pipeline/          # Kamiak HPC scripts
 ├── slicer-module/        # 3D Slicer extension
+├── tests/                # Test suite
+│   └── slicer_api/       # 3D Slicer API connection tests
 ├── docker/               # Docker Compose setup
 ├── firebase/             # Firebase configuration
 └── docs/                 # Documentation
@@ -99,6 +101,103 @@ See individual component READMEs:
 - **Batch Processing** - Submit multiple scans as array jobs
 - **3D Visualization** - Web-based VTK.js and desktop 3D Slicer
 - **Quantification** - Automatic organ volume, surface area, and statistics
+
+## 🧪 Testing
+
+### 3D Slicer API Connection Tests
+
+The project includes comprehensive tests for connecting to locally installed 3D Slicer:
+
+#### Prerequisites for Testing
+
+- **3D Slicer Installation**: Download and install 3D Slicer from [slicer.org](https://slicer.org)
+- **Python Dependencies**: Install test dependencies from requirements files
+
+#### Running Tests
+
+1. **Install Test Dependencies**
+   ```bash
+   # For ML pipeline tests
+   cd ml-pipeline
+   pip install -r requirements.txt
+   
+   # For backend tests
+   cd backend
+   pip install -r requirements.txt
+   ```
+
+2. **Run Unit Tests** (no Slicer required)
+   ```bash
+   pytest tests/slicer_api/test_slicer_connection.py -v
+   ```
+
+3. **Run Integration Tests** (requires Slicer installation)
+   ```bash
+   pytest tests/slicer_api/test_slicer_integration.py -v
+   ```
+
+4. **Run All Slicer Tests**
+   ```bash
+   pytest tests/slicer_api/ -v
+   ```
+
+#### Test Configuration
+
+Tests automatically detect Slicer installation in common Windows paths:
+- `C:\ProgramData\NA-MIC\Slicer*`
+- `C:\Program Files\Slicer*`
+- `C:\Program Files (x86)\Slicer*`
+- `C:\Users\*\AppData\Local\Slicer*`
+
+Customize detection in `tests/slicer_api/slicer_config.json`:
+```json
+{
+    "slicer_path": "/custom/path/to/Slicer.exe",
+    "timeout_seconds": 30,
+    "enable_cli_tests": true,
+    "enable_direct_import_tests": true
+}
+```
+
+#### Connection Methods Tested
+
+| Method | Description | Requirements |
+|--------|-------------|--------------|
+| **CLI Interface** | Execute Python code via `Slicer.exe --python-code` | Slicer executable |
+| **Direct Import** | Import Slicer Python modules directly | Slicer Python environment |
+
+#### Test Results
+
+Tests verify:
+- ✅ Slicer installation detection
+- ✅ CLI command execution
+- ✅ Volume loading operations
+- ✅ Segmentation node creation
+- ✅ Scene information retrieval
+- ✅ Error handling and timeouts
+
+#### Troubleshooting Tests
+
+**Slicer Not Found**
+```
+RuntimeError: 3D Slicer not available for CLI operations
+```
+- Ensure Slicer is installed and accessible
+- Check `slicer_config.json` for custom path
+
+**Import Errors**
+```
+ImportError: No module named 'slicer'
+```
+- Expected when running outside Slicer's Python environment
+- Tests will skip direct import tests automatically
+
+**Timeout Errors**
+```
+Command timed out after 30 seconds
+```
+- Increase timeout in `slicer_config.json`
+- Check Slicer installation integrity
 
 ## 🤝 Contributing
 
