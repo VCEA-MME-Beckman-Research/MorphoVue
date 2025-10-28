@@ -4,9 +4,9 @@ from datetime import datetime
 import uuid
 import json
 
-from app.firebase_client import firebase_client
+import app.firebase_client as fb
 from app.models import AnnotationSync, Annotation, ProcessingStatus
-from app.main import verify_auth_token
+from app.deps import verify_auth_token
 
 router = APIRouter()
 
@@ -18,8 +18,8 @@ async def sync_annotations(
 ):
     """Sync Label Studio annotations to Firestore"""
     try:
-        db = firebase_client.db
-        bucket = firebase_client.bucket
+        db = fb.firebase_client.db
+        bucket = fb.firebase_client.bucket
         
         annotation_id = str(uuid.uuid4())
         
@@ -74,7 +74,7 @@ async def get_scan_annotations(
 ):
     """Get all annotations for a scan"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         annotations_ref = db.collection('annotations').where('scan_id', '==', scan_id)
         annotations_ref = annotations_ref.order_by('created_at', direction='DESCENDING')
         
@@ -95,14 +95,14 @@ async def get_annotation_download_url(
 ):
     """Get signed URL for downloading annotation JSON"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('annotations').document(annotation_id).get()
         
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Annotation not found")
         
         annotation_data = doc.to_dict()
-        bucket = firebase_client.bucket
+        bucket = fb.firebase_client.bucket
         blob = bucket.blob(annotation_data['storage_path'])
         
         url = blob.generate_signed_url(

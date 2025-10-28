@@ -1,3 +1,4 @@
+import os
 import firebase_admin
 from firebase_admin import credentials, firestore, storage, auth
 from app.config import settings
@@ -25,10 +26,17 @@ class FirebaseClient:
     def initialize(self):
         """Initialize Firebase Admin SDK"""
         try:
-            cred = credentials.Certificate(settings.firebase_credentials_path)
-            firebase_admin.initialize_app(cred, {
-                'storageBucket': settings.firebase_storage_bucket
-            })
+            # Allow disabling during tests
+            if os.getenv("FIREBASE_DISABLE_INIT", "0") in ("1", "true", "True"):
+                logger.info("Firebase initialization disabled via FIREBASE_DISABLE_INIT")
+                return
+            # If credentials file missing, keep a no-op client for tests/local
+            cred_path = settings.firebase_credentials_path
+            if not os.path.exists(cred_path):
+                logger.warning("Firebase credentials not found; skipping initialization")
+                return
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred, {'storageBucket': settings.firebase_storage_bucket})
             logger.info("Firebase initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Firebase: {e}")

@@ -4,9 +4,9 @@ from typing import List
 
 class Settings(BaseSettings):
     # Firebase
-    firebase_project_id: str
-    firebase_storage_bucket: str
-    firebase_credentials_path: str
+    firebase_project_id: str = "test-project"
+    firebase_storage_bucket: str = "test-bucket"
+    firebase_credentials_path: str = "./firebase-credentials.json"
     
     # Label Studio
     label_studio_url: str = "http://localhost:8080"

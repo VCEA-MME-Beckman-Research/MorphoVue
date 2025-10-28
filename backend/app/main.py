@@ -12,6 +12,7 @@ from app.models import (
     ProcessingStatus, JobStatus
 )
 from app.routers import projects, scans, annotations, jobs, results
+from app.deps import verify_auth_token
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,22 +35,7 @@ app.add_middleware(
 )
 
 
-# Dependency for authentication
-async def verify_auth_token(authorization: Optional[str] = Header(None)):
-    """Verify Firebase ID token from Authorization header"""
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-    
-    try:
-        # Extract token from "Bearer <token>"
-        token = authorization.split("Bearer ")[-1]
-        decoded_token = firebase_client.verify_token(token)
-        if not decoded_token:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return decoded_token
-    except Exception as e:
-        logger.error(f"Auth verification failed: {e}")
-        raise HTTPException(status_code=401, detail="Authentication failed")
+"""Auth dependency moved to app.deps.verify_auth_token to avoid circular imports"""
 
 
 # Include routers

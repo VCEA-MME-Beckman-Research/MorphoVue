@@ -84,6 +84,10 @@ Set `REACT_APP_API_URL` to your FastAPI backend URL (default: http://localhost:8
 ### Label Studio
 Set `REACT_APP_LABEL_STUDIO_URL` to your Label Studio URL (default: http://localhost:8080).
 
+### 3D Viewer
+- The Review page now includes a VTK.js-based 3D viewer that renders NRRD masks (and optionally the underlying NRRD volume) using signed URLs from the backend.
+- Ensure the backend is reachable via `REACT_APP_API_URL` so the app can request signed download URLs for segmentation artifacts.
+
 ## Development
 
 ### Available Scripts

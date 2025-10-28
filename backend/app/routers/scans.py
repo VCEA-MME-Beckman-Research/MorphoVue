@@ -3,10 +3,13 @@ from typing import List, Optional
 from datetime import datetime
 import uuid
 import os
+import re
 
-from app.firebase_client import firebase_client
+import app.firebase_client as fb
 from app.models import Scan, ProcessingStatus
-from app.main import verify_auth_token
+from app.deps import verify_auth_token
+from PIL import Image, ImageSequence
+import io
 
 router = APIRouter()
 
@@ -23,8 +26,8 @@ async def upload_scan(
         if not file.filename.lower().endswith(('.tiff', '.tif')):
             raise HTTPException(status_code=400, detail="Only TIFF files are supported")
         
-        db = firebase_client.db
-        bucket = firebase_client.bucket
+        db = fb.firebase_client.db
+        bucket = fb.firebase_client.bucket
         
         # Generate scan ID
         scan_id = str(uuid.uuid4())
@@ -37,6 +40,18 @@ async def upload_scan(
         content = await file.read()
         file_size = len(content)
         
+        # Attempt to compute number of slices (pages) using PIL
+        num_slices = None
+        try:
+            with Image.open(io.BytesIO(content)) as im:
+                if getattr(im, 'is_animated', False):
+                    num_slices = im.n_frames
+                else:
+                    # Fallback: iterate frames if available
+                    num_slices = sum(1 for _ in ImageSequence.Iterator(im)) or 1
+        except Exception:
+            num_slices = None
+
         # Upload with metadata
         blob.upload_from_string(
             content,
@@ -52,7 +67,7 @@ async def upload_scan(
             "upload_timestamp": datetime.utcnow(),
             "processing_status": ProcessingStatus.UPLOADED.value,
             "file_size": file_size,
-            "num_slices": None
+            "num_slices": num_slices
         }
         
         db.collection('scans').document(scan_id).set(scan_data)
@@ -68,7 +83,7 @@ async def upload_scan(
 async def get_scan(scan_id: str, user=Depends(verify_auth_token)):
     """Get scan metadata"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('scans').document(scan_id).get()
         
         if not doc.exists:
@@ -88,7 +103,7 @@ async def list_project_scans(
 ):
     """List all scans for a project"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         scans_ref = db.collection('scans').where('project_id', '==', project_id)
         scans_ref = scans_ref.order_by('upload_timestamp', direction='DESCENDING')
         
@@ -110,7 +125,7 @@ async def update_scan_status(
 ):
     """Update scan processing status"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc_ref = db.collection('scans').document(scan_id)
         
         doc = doc_ref.get()
@@ -135,15 +150,26 @@ async def get_scan_download_url(
 ):
     """Get a signed URL for downloading the scan"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('scans').document(scan_id).get()
         
         if not doc.exists:
             raise HTTPException(status_code=404, detail="Scan not found")
         
         scan_data = doc.to_dict()
-        bucket = firebase_client.bucket
-        blob = bucket.blob(scan_data['storage_path'])
+        bucket = fb.firebase_client.bucket
+        storage_path = scan_data['storage_path']
+        # Support both gs://bucket/path and direct path strings
+        if isinstance(storage_path, str) and storage_path.startswith("gs://"):
+            m = re.match(r"gs://([^/]+)/(.+)", storage_path)
+            if not m:
+                raise HTTPException(status_code=400, detail="Invalid storage URL")
+            bucket_name, path = m.group(1), m.group(2)
+            from firebase_admin import storage as fa_storage
+            bkt = fa_storage.bucket(bucket_name)
+            blob = bkt.blob(path)
+        else:
+            blob = bucket.blob(storage_path)
         
         # Generate signed URL (valid for 1 hour)
         url = blob.generate_signed_url(
@@ -157,4 +183,23 @@ async def get_scan_download_url(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate download URL: {str(e)}")
+
+
+@router.get("/scans/{scan_id}/slices")
+async def get_scan_num_slices(
+    scan_id: str,
+    user=Depends(verify_auth_token)
+):
+    """Return number of slices if available"""
+    try:
+        db = fb.firebase_client.db
+        doc = db.collection('scans').document(scan_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Scan not found")
+        data = doc.to_dict()
+        return {"num_slices": data.get("num_slices")}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get slice count: {str(e)}")
 

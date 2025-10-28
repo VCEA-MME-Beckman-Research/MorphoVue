@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List
 from datetime import datetime
 import uuid
 
-from app.firebase_client import firebase_client
+import app.firebase_client as fb
 from app.models import ResultUpload, Segmentation, QuantificationResult
-from app.main import verify_auth_token
+from app.deps import verify_auth_token
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def upload_results(
 ):
     """Upload MONAI segmentation results from Kamiak"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         
         # Create segmentation document
         segmentation_id = str(uuid.uuid4())
@@ -25,6 +25,7 @@ async def upload_results(
             "id": segmentation_id,
             "scan_id": result.scan_id,
             "mask_url": result.segmentation_url,
+            "volume_url": result.volume_url,
             "model_version": result.model_version,
             "metrics": result.metrics,
             "created_at": datetime.utcnow()
@@ -65,7 +66,7 @@ async def get_scan_segmentations(
 ):
     """Get all segmentations for a scan"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         segmentations_ref = db.collection('segmentations').where('scan_id', '==', scan_id)
         segmentations_ref = segmentations_ref.order_by('created_at', direction='DESCENDING')
         
@@ -86,7 +87,7 @@ async def get_quantification_results(
 ):
     """Get quantification results for a segmentation"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         quant_ref = db.collection('quantification_results').where('segmentation_id', '==', segmentation_id)
         
         results = []
@@ -106,7 +107,7 @@ async def get_segmentation(
 ):
     """Get segmentation details"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('segmentations').document(segmentation_id).get()
         
         if not doc.exists:
@@ -117,4 +118,59 @@ async def get_segmentation(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get segmentation: {str(e)}")
+
+
+@router.get("/segmentations/{segmentation_id}/download-url")
+async def get_segmentation_download_url(
+    segmentation_id: str,
+    file_type: str = Query("mask", pattern="^(mask|volume)$"),
+    user=Depends(verify_auth_token)
+):
+    """Get signed download URL for segmentation mask or volume"""
+    try:
+        db = fb.firebase_client.db
+        bucket = fb.firebase_client.bucket
+
+        doc = db.collection('segmentations').document(segmentation_id).get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Segmentation not found")
+
+        seg_data = doc.to_dict()
+
+        target_url = None
+        if file_type == "mask":
+            target_url = seg_data.get("mask_url")
+        else:
+            target_url = seg_data.get("volume_url")
+
+        if not target_url:
+            raise HTTPException(status_code=404, detail=f"{file_type.capitalize()} not available for this segmentation")
+
+        # Derive storage path from gs:// URL or take path directly
+        storage_path = None
+        if isinstance(target_url, str) and target_url.startswith("gs://"):
+            # Expect gs://<bucket>/<path>
+            without_scheme = target_url[5:]
+            if '/' not in without_scheme:
+                raise HTTPException(status_code=400, detail="Invalid gs:// URL")
+            bucket_name, storage_path = without_scheme.split('/', 1)
+            # If different bucket, try to use it
+            from firebase_admin import storage as fa_storage
+            bkt = fa_storage.bucket(bucket_name)
+        else:
+            storage_path = target_url
+            bkt = bucket
+
+        blob = bkt.blob(storage_path)
+        url = blob.generate_signed_url(
+            version="v4",
+            expiration=3600,
+            method="GET"
+        )
+
+        return {"download_url": url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate signed URL: {str(e)}")
 

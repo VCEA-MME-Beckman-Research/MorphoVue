@@ -3,9 +3,9 @@ from typing import List
 from datetime import datetime
 import uuid
 
-from app.firebase_client import firebase_client
+import app.firebase_client as fb
 from app.models import ProjectCreate, Project
-from app.main import verify_auth_token
+from app.deps import verify_auth_token
 
 router = APIRouter()
 
@@ -17,7 +17,7 @@ async def create_project(
 ):
     """Create a new research project"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         project_id = str(uuid.uuid4())
         
         project_data = {
@@ -40,7 +40,7 @@ async def create_project(
 async def list_projects(user=Depends(verify_auth_token)):
     """List all projects for the authenticated user"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         projects_ref = db.collection('projects')
         
         # Filter by researcher_id for non-admin users
@@ -60,7 +60,7 @@ async def list_projects(user=Depends(verify_auth_token)):
 async def get_project(project_id: str, user=Depends(verify_auth_token)):
     """Get a specific project"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('projects').document(project_id).get()
         
         if not doc.exists:

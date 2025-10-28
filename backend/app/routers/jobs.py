@@ -3,9 +3,9 @@ from typing import List
 from datetime import datetime
 import uuid
 
-from app.firebase_client import firebase_client
+import app.firebase_client as fb
 from app.models import JobGenerate, JobUpdate, KamiakJob, JobInstructions, JobStatus, ProcessingStatus
-from app.main import verify_auth_token
+from app.deps import verify_auth_token
 from app.config import settings
 
 router = APIRouter()
@@ -65,8 +65,8 @@ async def generate_job(
 ):
     """Generate Kamiak job script for batch processing"""
     try:
-        db = firebase_client.db
-        bucket = firebase_client.bucket
+        db = fb.firebase_client.db
+        bucket = fb.firebase_client.bucket
         
         # Validate that all scans exist and are annotated
         for scan_id in job_config.scan_ids:
@@ -165,7 +165,7 @@ async def generate_job(
 async def get_job(job_id: str, user=Depends(verify_auth_token)):
     """Get job details"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         doc = db.collection('kamiak_jobs').document(job_id).get()
         
         if not doc.exists:
@@ -182,7 +182,7 @@ async def get_job(job_id: str, user=Depends(verify_auth_token)):
 async def list_jobs(user=Depends(verify_auth_token)):
     """List all jobs"""
     try:
-        db = firebase_client.db
+        db = fb.firebase_client.db
         jobs_ref = db.collection('kamiak_jobs').order_by('submitted_at', direction='DESCENDING')
         
         jobs = []

@@ -4,10 +4,19 @@ Computes organ-level statistics from segmentation masks
 """
 
 import numpy as np
-import SimpleITK as sitk
-from scipy import ndimage
-from typing import Dict, List, Tuple
 import logging
+from typing import Dict, List, Tuple
+
+# Optional deps: SimpleITK and SciPy (provide fallbacks if unavailable)
+try:
+    import SimpleITK as sitk  # type: ignore
+except Exception:  # pragma: no cover - optional
+    sitk = None  # type: ignore
+
+try:
+    from scipy import ndimage as sp_ndimage  # type: ignore
+except Exception:  # pragma: no cover - optional
+    sp_ndimage = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -54,25 +63,48 @@ def compute_surface_area(
         Surface area in mm²
     """
     binary_mask = (mask == label).astype(np.uint8)
-    
-    # Convert to SimpleITK image
-    sitk_mask = sitk.GetImageFromArray(binary_mask)
-    sitk_mask.SetSpacing(spacing[::-1])  # SimpleITK uses (x, y, z)
-    
-    # Compute surface
-    label_shape_filter = sitk.LabelShapeStatisticsImageFilter()
-    label_shape_filter.Execute(sitk_mask)
-    
-    try:
-        surface_area = label_shape_filter.GetPerimeter(1)  # 1 is the label in binary mask
-    except:
-        # Fallback: estimate using edge detection
-        edges = ndimage.sobel(binary_mask.astype(float))
-        num_surface_voxels = np.sum(edges > 0)
-        voxel_area = spacing[1] * spacing[2]  # Approximate
-        surface_area = num_surface_voxels * voxel_area
-    
-    return float(surface_area)
+
+    # Preferred path with SimpleITK if available
+    if sitk is not None:
+        try:
+            sitk_mask = sitk.GetImageFromArray(binary_mask)
+            sitk_mask.SetSpacing(spacing[::-1])  # SimpleITK uses (x, y, z)
+            label_shape_filter = sitk.LabelShapeStatisticsImageFilter()
+            label_shape_filter.Execute(sitk_mask)
+            # Not all versions expose surface area directly; approximate via perimeter or fallback
+            try:
+                return float(label_shape_filter.GetPerimeter(1))
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    # Fallback without SimpleITK/SciPy: count boundary faces between label and background
+    z, y, x = binary_mask.shape
+    sz, sy, sx = spacing
+
+    def count_axis_faces(axis: int) -> int:
+        # Compare adjacent voxels along axis; count faces where value changes
+        if axis == 0:  # z
+            a = binary_mask[:-1, :, :]
+            b = binary_mask[1:, :, :]
+        elif axis == 1:  # y
+            a = binary_mask[:, :-1, :]
+            b = binary_mask[:, 1:, :]
+        else:  # x
+            a = binary_mask[:, :, :-1]
+            b = binary_mask[:, :, 1:]
+        # Count faces where exactly one of the two is 1
+        return int(np.count_nonzero(a != b))
+
+    faces_z = count_axis_faces(0)
+    faces_y = count_axis_faces(1)
+    faces_x = count_axis_faces(2)
+
+    area_z = faces_z * (sy * sx)
+    area_y = faces_y * (sz * sx)
+    area_x = faces_x * (sz * sy)
+    return float(area_x + area_y + area_z)
 
 
 def compute_centroid(mask: np.ndarray, label: int) -> List[float]:
@@ -87,8 +119,17 @@ def compute_centroid(mask: np.ndarray, label: int) -> List[float]:
         Centroid coordinates [z, y, x]
     """
     binary_mask = (mask == label)
-    centroid = ndimage.center_of_mass(binary_mask)
-    
+    if sp_ndimage is not None:
+        try:
+            centroid = sp_ndimage.center_of_mass(binary_mask)
+            return [float(c) for c in centroid]
+        except Exception:
+            pass
+    # Fallback: mean of coordinates
+    coords = np.argwhere(binary_mask)
+    if coords.size == 0:
+        return [0.0, 0.0, 0.0]
+    centroid = coords.mean(axis=0)
     return [float(c) for c in centroid]
 
 

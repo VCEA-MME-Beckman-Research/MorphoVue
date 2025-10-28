@@ -60,6 +60,7 @@ class JobUpdate(BaseModel):
 class ResultUpload(BaseModel):
     scan_id: str
     segmentation_url: str
+    volume_url: Optional[str] = None
     model_version: str
     metrics: Dict[str, Any]
     quantification: List[Dict[str, Any]]
@@ -100,6 +101,7 @@ class Segmentation(BaseModel):
     id: str
     scan_id: str
     mask_url: str
+    volume_url: Optional[str] = None
     model_version: str
     metrics: Dict[str, Any]
     created_at: datetime
