@@ -24,7 +24,8 @@ class MONAISegmenter:
         model_path: str = None,
         in_channels: int = 1,
         out_channels: int = 4,
-        device: str = None
+        device: str = None,
+        dummy_mode: bool = False
     ):
         """
         Initialize MONAI segmenter
@@ -35,7 +36,11 @@ class MONAISegmenter:
             in_channels: Number of input channels (1 for grayscale)
             out_channels: Number of output classes (background + organs)
             device: Device to use (cuda/cpu)
+            dummy_mode: If True, use dummy segmentation instead of loading model
         """
+        self.dummy_mode = dummy_mode
+        self.out_channels = out_channels
+        
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
@@ -43,6 +48,11 @@ class MONAISegmenter:
         
         logger.info(f"Using device: {self.device}")
         
+        if dummy_mode:
+            self.model = None
+            logger.info("Initialized MONAI segmenter in DUMMY mode")
+            return
+
         # Initialize model
         if model_type.lower() == "unet":
             self.model = UNet(
@@ -71,9 +81,29 @@ class MONAISegmenter:
         
         self.model.to(self.device)
         self.model.eval()
-        
-        self.out_channels = out_channels
     
+    def _generate_dummy_mask(self, shape: Tuple[int, int, int]) -> np.ndarray:
+        """Generate dummy geometric masks for testing"""
+        mask = np.zeros(shape, dtype=np.uint8)
+        z, y, x = shape
+        
+        # Create 3 dummy organs as spheres/ellipsoids
+        # Organ 1: Center
+        cz, cy, cx = z//2, y//2, x//2
+        r = min(z, y, x) // 4
+        
+        Z, Y, X = np.ogrid[:z, :y, :x]
+        dist_sq = (Z - cz)**2 + (Y - cy)**2 + (X - cx)**2
+        mask[dist_sq <= r**2] = 1
+        
+        # Organ 2: Offset
+        cz2, cy2, cx2 = z//2, y//2 + r, x//2 + r
+        r2 = r // 1.5
+        dist_sq2 = (Z - cz2)**2 + (Y - cy2)**2 + (X - cx2)**2
+        mask[dist_sq2 <= r2**2] = 2
+        
+        return mask
+
     def preprocess(self, volume: np.ndarray, target_shape: Tuple[int, int, int] = None) -> torch.Tensor:
         """
         Preprocess volume for model input
@@ -125,20 +155,23 @@ class MONAISegmenter:
         
         logger.info(f"Input shape: {volume_tensor.shape}")
         
-        # Inference
-        with torch.no_grad():
-            # Use sliding window inference for large volumes
-            output = sliding_window_inference(
-                inputs=volume_tensor,
-                roi_size=roi_size,
-                sw_batch_size=sw_batch_size,
-                predictor=self.model,
-                overlap=0.5
-            )
-        
-        # Post-process: convert logits to class predictions
-        output = torch.argmax(output, dim=1)
-        mask = output.cpu().numpy()[0]  # Remove batch dimension
+        if self.dummy_mode:
+            mask = self._generate_dummy_mask(volume.shape)
+        else:
+            # Inference
+            with torch.no_grad():
+                # Use sliding window inference for large volumes
+                output = sliding_window_inference(
+                    inputs=volume_tensor,
+                    roi_size=roi_size,
+                    sw_batch_size=sw_batch_size,
+                    predictor=self.model,
+                    overlap=0.5
+                )
+            
+            # Post-process: convert logits to class predictions
+            output = torch.argmax(output, dim=1)
+            mask = output.cpu().numpy()[0]  # Remove batch dimension
         
         # Compute metrics
         metrics = self.compute_metrics(mask)

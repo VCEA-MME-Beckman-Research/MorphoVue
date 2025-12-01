@@ -13,18 +13,57 @@ logger = logging.getLogger(__name__)
 
 
 class YOLODetector:
-    def __init__(self, model_path: str = "yolov10s.pt", confidence: float = 0.25):
+    def __init__(self, model_path: str = "yolov10s.pt", confidence: float = 0.25, dummy_mode: bool = False):
         """
         Initialize YOLOv10 detector
         
         Args:
             model_path: Path to YOLOv10 weights
             confidence: Detection confidence threshold
+            dummy_mode: If True, use dummy detections instead of loading model
         """
-        self.model = YOLO(model_path)
+        self.dummy_mode = dummy_mode
         self.confidence = confidence
-        logger.info(f"Loaded YOLOv10 model from {model_path}")
+        
+        if not dummy_mode:
+            self.model = YOLO(model_path)
+            logger.info(f"Loaded YOLOv10 model from {model_path}")
+        else:
+            self.model = None
+            logger.info("Initialized YOLOv10 detector in DUMMY mode")
     
+    def _generate_dummy_detections(self, slice_shape: Tuple[int, int]) -> List[Dict]:
+        """Generate random dummy detections for testing"""
+        import random
+        
+        if random.random() > 0.7:  # 30% chance of no detection
+            return []
+            
+        detections = []
+        num_dets = random.randint(1, 2)
+        
+        h, w = slice_shape
+        
+        for _ in range(num_dets):
+            # Create a box roughly in the center
+            cx = w // 2 + random.randint(-w//4, w//4)
+            cy = h // 2 + random.randint(-h//4, h//4)
+            bw = random.randint(w//10, w//5)
+            bh = random.randint(h//10, h//5)
+            
+            x1 = max(0, cx - bw//2)
+            y1 = max(0, cy - bh//2)
+            x2 = min(w, cx + bw//2)
+            y2 = min(h, cy + bh//2)
+            
+            detections.append({
+                'bbox': [float(x1), float(y1), float(x2), float(y2)],
+                'confidence': 0.8 + random.random() * 0.15,
+                'class': 0
+            })
+            
+        return detections
+
     def detect_slice(self, slice_image: np.ndarray) -> List[Dict]:
         """
         Detect objects in a single slice
@@ -35,6 +74,9 @@ class YOLODetector:
         Returns:
             List of detection dictionaries
         """
+        if self.dummy_mode:
+            return self._generate_dummy_detections(slice_image.shape[:2])
+
         # Ensure RGB format
         if slice_image.ndim == 2:
             slice_rgb = np.stack([slice_image] * 3, axis=-1)
